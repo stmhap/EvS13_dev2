@@ -173,7 +173,7 @@ class Yolo3_PL_Model(LightningModule):
             
         #if epoch_counter > 0: #and epoch % 3 == 0:
         _, test_loader, _ = get_loaders(
-            train_csv_path=config.DATASET + "/train.csv", test_csv_path=config.DATASET + "/test.csv"
+            #train_csv_path=config.DATASET + "/train.csv", test_csv_path=config.DATASET + "/test.csv"
         )        
         check_class_accuracy(self, test_loader, threshold=config.CONF_THRESHOLD)
         pred_boxes, true_boxes = get_evaluation_bboxes(
