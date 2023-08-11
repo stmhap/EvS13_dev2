@@ -155,9 +155,19 @@ class Yolo3_PL_Model(LightningModule):
             garbage_collection_cuda()
 
     def on_train_epoch_end(self):
+        train_epoch_average = torch.stack(self.train_step_outputs).mean()
+        self.train_step_outputs.clear()
         # Clean up Cuda after batch for effective memory management
-        if self.collect_garbage == 'epoch':
-            garbage_collection_cuda()
+        # if self.collect_garbage == 'epoch':
+        #     garbage_collection_cuda()
+            
+    def on_validation_epoch_end(self):
+        test_epoch_average = torch.stack(self.test_step_outputs).mean()
+        self.train_step_outputs.clear()
+        # Clean up Cuda after batch for effective memory management
+        # if self.collect_garbage == 'epoch':
+        #     garbage_collection_cuda()
+    
 
     def check_epoch_metrics(self):
             
