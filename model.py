@@ -10,7 +10,15 @@ from torchinfo import summary
 
 import config
 from utils import ResizeDataLoader
-
+from utils import (
+    mean_average_precision,
+    get_evaluation_bboxes,
+    save_checkpoint,
+    load_checkpoint,
+    check_class_accuracy,
+    get_loaders,
+    plot_couple_examples
+)
 
 class Yolo3_PL_Model(LightningModule):
     def __init__(self, in_channels=3, nclasses=config.NUM_CLASSES, batch_size=config.BATCH_SIZE,
@@ -150,6 +158,29 @@ class Yolo3_PL_Model(LightningModule):
         # Clean up Cuda after batch for effective memory management
         if self.collect_garbage == 'epoch':
             garbage_collection_cuda()
+
+    def check_epoch_metrics(self):
+            
+        #if epoch_counter > 0: #and epoch % 3 == 0:
+        _, test_loader, _ = get_loaders(
+            train_csv_path=config.DATASET + "/train.csv", test_csv_path=config.DATASET + "/test.csv"
+        )        
+        check_class_accuracy(self, test_loader, threshold=config.CONF_THRESHOLD)
+        pred_boxes, true_boxes = get_evaluation_bboxes(
+            test_loader,
+            self,
+            iou_threshold=config.NMS_IOU_THRESH,
+            anchors=config.ANCHORS,
+            threshold=config.CONF_THRESHOLD,
+        )
+        mapval = mean_average_precision(
+            pred_boxes,
+            true_boxes,
+            iou_threshold=config.MAP_IOU_THRESH,
+            box_format="midpoint",
+            num_classes=config.NUM_CLASSES,
+        )
+        print(f"MAP: {mapval.item()}")
 
 
 def main():
