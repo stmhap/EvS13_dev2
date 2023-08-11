@@ -7,6 +7,8 @@ from loss import YoloLossCumulative
 from torch import optim
 from torch.utils.data import DataLoader
 from torchinfo import summary
+from torchmetrics import Metric
+from torch import Tensor
 
 import config
 from utils import ResizeDataLoader
@@ -30,6 +32,10 @@ class Yolo3_PL_Model(LightningModule):
         self.learning_rate = learning_rate
         self.collect_garbage = collect_garbage
         self.nepochs = nepochs
+        self.train_accuracy = model_accuracy()
+        self.validation_accuracy = model_accuracy()
+        self.train_loss = MeanMetric()
+        self.validation_loss = MeanMetric()                    
 
         # self.scaled_anchors = config.SCALED_ANCHORS
         # we want the scaled anchors to be saved and restored in the state_dict, 
@@ -52,13 +58,13 @@ class Yolo3_PL_Model(LightningModule):
         out = self.forward(x)
         loss = self.loss_criterion(out, y, self.scaled_anchors)
         
-        preds = torch.argmax(out, dim=1)
-        acc = (preds == y).float().mean()
+        self.train_loss.update(loss, y.numel())
+        self.train_accuracy.update(out, y)
         
         del out, x, y
 
-        self.log(f"train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log(f"train_acc", acc, on_epoch=True, prog_bar=True, logger=True)
+        # self.log(f"train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log(f"train_acc", acc, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -67,13 +73,13 @@ class Yolo3_PL_Model(LightningModule):
         out = self.forward(x)
         loss = self.loss_criterion(out, y, self.scaled_anchors)
 
-        preds = torch.argmax(out, dim=1)
-        acc = (preds == y).float().mean()
+        self.validation_loss.update(loss, y.numel())
+        self.validation_accuracy.update(out, y)  
         
         del out, x, y
 
-        self.log(f"val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log(f"val_acc", acc, on_epoch=True, prog_bar=True, logger=True)   
+        # self.log(f"val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log(f"val_acc", acc, on_epoch=True, prog_bar=True, logger=True)   
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
@@ -169,12 +175,9 @@ class Yolo3_PL_Model(LightningModule):
         # self.train_step_outputs.clear()
         # Clean up Cuda after batch for effective memory management
 
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        avg_acc = torch.stack([x['train_acc'] for x in outputs]).mean()
-
-        self.log('avg_train_loss', avg_loss)
-        self.log('avg_train_acc', avg_acc)   
-        
+        self.log('train_loss', self.train_loss)
+        self.log('train_acc', self.train_accuracy) 
+      
         if self.collect_garbage == 'epoch':
             garbage_collection_cuda()
             
@@ -183,11 +186,8 @@ class Yolo3_PL_Model(LightningModule):
         # self.train_step_outputs.clear()
         # Clean up Cuda after batch for effective memory management
         
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        avg_acc = torch.stack([x['val_acc'] for x in outputs]).mean()
-
-        self.log('avg_val_loss', avg_loss)
-        self.log('avg_val_acc', avg_acc)   
+        self.log('val_loss', self.validation_loss)
+        self.log('val_acc', self.validation_accuracy)   
         
         if self.collect_garbage == 'epoch':
             garbage_collection_cuda()
