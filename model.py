@@ -7,20 +7,10 @@ from loss import YoloLossCumulative
 from torch import optim
 from torch.utils.data import DataLoader
 from torchinfo import summary
-from torchmetrics import Metric
-from torch import Tensor
 
 import config
 from utils import ResizeDataLoader
-from utils import (
-    mean_average_precision,
-    get_evaluation_bboxes,
-    save_checkpoint,
-    load_checkpoint,
-    check_class_accuracy,
-    get_loaders,
-    plot_couple_examples
-)
+
 
 class Yolo3_PL_Model(LightningModule):
     def __init__(self, in_channels=3, nclasses=config.NUM_CLASSES, batch_size=config.BATCH_SIZE,
@@ -32,15 +22,17 @@ class Yolo3_PL_Model(LightningModule):
         self.learning_rate = learning_rate
         self.collect_garbage = collect_garbage
         self.nepochs = nepochs
-        self.train_accuracy = model_accuracy()
-        self.validation_accuracy = model_accuracy()
-        self.train_loss = MeanMetric()
-        self.validation_loss = MeanMetric()                    
 
         # self.scaled_anchors = config.SCALED_ANCHORS
         # we want the scaled anchors to be saved and restored in the state_dict, 
         # but not trained by the optimizer, so we register them as buffers
-        self.register_buffer("scaled_anchors", config.SCALED_ANCHORS)
+        # self.register_buffer("scaled_anchors", config.SCALED_ANCHORS)
+
+        self.scaled_anchors = (
+                torch.tensor(config.ANCHORS)
+                * torch.tensor(config.S).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+            ).to(config.DEVICE)
+        self.train_step_outputs = []
 
     def forward(self, x):
         return self.network_architecture(x)
@@ -57,14 +49,13 @@ class Yolo3_PL_Model(LightningModule):
         x, y = batch
         out = self.forward(x)
         loss = self.loss_criterion(out, y, self.scaled_anchors)
-        
-        self.train_loss.update(loss, y.numel())
-        self.train_accuracy.update(out, y)
-        
         del out, x, y
 
-        # self.log(f"train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        # self.log(f"train_acc", acc, on_epoch=True, prog_bar=True, logger=True)
+        #self.log(f"train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        # Logging the training loss for visualization
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)  
+        self.train_step_outputs.append(loss)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -72,14 +63,9 @@ class Yolo3_PL_Model(LightningModule):
         x, y = batch
         out = self.forward(x)
         loss = self.loss_criterion(out, y, self.scaled_anchors)
-
-        self.validation_loss.update(loss, y.numel())
-        self.validation_accuracy.update(out, y)  
-        
         del out, x, y
 
-        # self.log(f"val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        # self.log(f"val_acc", acc, on_epoch=True, prog_bar=True, logger=True)   
+        self.log(f"val_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
@@ -170,51 +156,23 @@ class Yolo3_PL_Model(LightningModule):
         if self.collect_garbage == 'batch':
             garbage_collection_cuda()
 
-    def on_train_epoch_end(self, outputs):
-        # train_epoch_average = torch.stack(self.train_step_outputs).mean()
-        # self.train_step_outputs.clear()
+    def on_train_epoch_end(self):
         # Clean up Cuda after batch for effective memory management
 
-        self.log('train_loss', self.train_loss)
-        self.log('train_acc', self.train_accuracy) 
-      
-        if self.collect_garbage == 'epoch':
-            garbage_collection_cuda()
-            
-    def on_validation_epoch_end(self):
-        # test_epoch_average = torch.stack(self.test_step_outputs).mean()
-        # self.train_step_outputs.clear()
-        # Clean up Cuda after batch for effective memory management
-        
-        self.log('val_loss', self.validation_loss)
-        self.log('val_acc', self.validation_accuracy)   
-        
-        if self.collect_garbage == 'epoch':
-            garbage_collection_cuda()
-    
+        print(f"\nCurrently epoch {self.current_epoch}")
+        train_epoch_average = torch.stack(self.train_step_outputs).mean()
+        self.train_step_outputs.clear()
+        print(f"Train loss {train_epoch_average}")
+        print("On Train Eval loader:")
+        print("On Train loader:")
+        class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.model, self.train_loader,
+                                                                             threshold=config.CONF_THRESHOLD)
+        self.log("class_accuracy", class_accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log("no_obj_accuracy", no_obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log("obj_accuracy", obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
 
-    def check_epoch_metrics(self):
-            
-        #if epoch_counter > 0: #and epoch % 3 == 0:
-        _, test_loader, _ = get_loaders(
-            #train_csv_path=config.DATASET + "/train.csv", test_csv_path=config.DATASET + "/test.csv"
-        )        
-        check_class_accuracy(self, test_loader, threshold=config.CONF_THRESHOLD)
-        pred_boxes, true_boxes = get_evaluation_bboxes(
-            test_loader,
-            self,
-            iou_threshold=config.NMS_IOU_THRESH,
-            anchors=config.ANCHORS,
-            threshold=config.CONF_THRESHOLD,
-        )
-        mapval = mean_average_precision(
-            pred_boxes,
-            true_boxes,
-            iou_threshold=config.MAP_IOU_THRESH,
-            box_format="midpoint",
-            num_classes=config.NUM_CLASSES,
-        )
-        print(f"MAP: {mapval.item()}")
+        if self.collect_garbage == 'epoch':
+            garbage_collection_cuda()
 
 
 def main():
