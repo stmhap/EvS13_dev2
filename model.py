@@ -159,7 +159,7 @@ class Yolo3_PL_Model(LightningModule):
     def on_train_epoch_end(self):
         # Clean up Cuda after batch for effective memory management
         if config.SAVE_MODEL:
-            save_checkpoint(self.model, self.optimizer, filename=config.CHECKPOINT_FILE)
+            save_checkpoint(self.network_architecture, self.optimizer, filename=config.CHECKPOINT_FILE)
         
         #epoch = self.current_epoch + 1
         if self.trainer.current_epoch > 0:
