@@ -76,7 +76,7 @@ class Yolo3_PL_Model(LightningModule):
         return self.forward(x)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate/100, weight_decay=config.WEIGHT_DECAY)
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate/100, weight_decay=config.WEIGHT_DECAY)
         scheduler = optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=self.learning_rate,
@@ -89,7 +89,7 @@ class Yolo3_PL_Model(LightningModule):
             anneal_strategy='linear'
         )
         return {
-            'optimizer': optimizer,
+            'optimizer': self.optimizer,
             'lr_scheduler': {
                 "scheduler": scheduler,
                 "interval": "step",
