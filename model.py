@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchinfo import summary
 
 import config
-from utils import ResizeDataLoader, check_class_accuracy
+from utils import ResizeDataLoader, check_class_accuracy, plot_couple_examples
 
 
 class Yolo3_PL_Model(LightningModule):
