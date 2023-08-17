@@ -82,8 +82,8 @@ class Yolo3_PL_Model(LightningModule):
         scheduler = optim.lr_scheduler.OneCycleLR(
             self.optimizer,
             max_lr=self.learning_rate,
-            steps_per_epoch=len(self.train_dataloader())+1,
-            epochs=self.nepochs,
+            steps_per_epoch=len(self.train_dataloader()),
+            epochs=self.trainer.max_epochs, #nepochs,
             pct_start=0.2,
             div_factor=100,
             three_phase=False,
