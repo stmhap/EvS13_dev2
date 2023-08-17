@@ -160,17 +160,22 @@ class Yolo3_PL_Model(LightningModule):
 
     def on_train_epoch_end(self):
         # Clean up Cuda after batch for effective memory management
+
+
         if config.SAVE_MODEL:
             save_checkpoint(self.network_architecture, self.optimizer, filename=config.CHECKPOINT_FILE)
         
-        #epoch = self.current_epoch + 1
-        print("Epoch: ", self.trainer.current_epoch)
-        if self.trainer.current_epoch > 0:
+        epoch = self.trainer.current_epoch + 1
+        print("Epoch: ", epoch)
+
+        train_epoch_average = torch.stack(self.train_step_outputs).mean()
+        self.train_step_outputs.clear()
+        print(f"Train loss {train_epoch_average}")
+
+        if epoch > 1 and epoch % 10 == 0:
             plot_couple_examples(self.network_architecture, self.val_dataloader(), 0.6, 0.5, self.scaled_anchors)
         # print(f"\nCurrently epoch {self.current_epoch}")
-            train_epoch_average = torch.stack(self.train_step_outputs).mean()
-            self.train_step_outputs.clear()
-            print(f"Train loss {train_epoch_average}")
+
             # print("On Train Eval loader:")
             print("On Train loader:")
             # class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.network_architecture, self.train_dataloader(),
@@ -178,7 +183,7 @@ class Yolo3_PL_Model(LightningModule):
 
             check_class_accuracy(self.network_architecture, self.train_dataloader(),
                                  threshold=config.CONF_THRESHOLD) 
-            
+        if epoch > 30 and epoch % 8 == 0:    
             print("On Train Eval loader:")
             check_class_accuracy(self.network_architecture, self.val_dataloader(),
                                  threshold=config.CONF_THRESHOLD)
