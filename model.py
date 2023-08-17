@@ -165,7 +165,7 @@ class Yolo3_PL_Model(LightningModule):
         print(f"Train loss {train_epoch_average}")
         print("On Train Eval loader:")
         print("On Train loader:")
-        class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.model, self.train_loader,
+        class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.network_architecture, self.train_dataloader(),
                                                                              threshold=config.CONF_THRESHOLD)
         self.log("class_accuracy", class_accuracy, on_epoch=True, prog_bar=True, logger=True)
         self.log("no_obj_accuracy", no_obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
