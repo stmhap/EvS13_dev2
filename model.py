@@ -78,7 +78,7 @@ class Yolo3_PL_Model(LightningModule):
     def configure_optimizers(self):
         self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate/100, weight_decay=config.WEIGHT_DECAY)
         scheduler = optim.lr_scheduler.OneCycleLR(
-            optimizer,
+            self.optimizer,
             max_lr=self.learning_rate,
             steps_per_epoch=len(self.train_dataloader()),
             epochs=self.nepochs,
