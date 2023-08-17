@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchinfo import summary
 
 import config
-from utils import ResizeDataLoader, check_class_accuracy, plot_couple_examples, save_checkpoint
+from utils import ResizeDataLoader, check_class_accuracy, plot_couple_examples, save_checkpoint, mean_average_precision, get_evaluation_bboxes
 
 
 class Yolo3_PL_Model(LightningModule):
@@ -20,8 +20,10 @@ class Yolo3_PL_Model(LightningModule):
         self.loss_criterion = YoloLossCumulative()
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.save_hyperparameters()
         self.collect_garbage = collect_garbage
         self.nepochs = nepochs
+        self.scaler = torch.cuda.amp.GradScaler()
 
         # self.scaled_anchors = config.SCALED_ANCHORS
         # we want the scaled anchors to be saved and restored in the state_dict, 
@@ -162,6 +164,7 @@ class Yolo3_PL_Model(LightningModule):
             save_checkpoint(self.network_architecture, self.optimizer, filename=config.CHECKPOINT_FILE)
         
         #epoch = self.current_epoch + 1
+        print("Epoch: ", self.trainer.current_epoch)
         if self.trainer.current_epoch > 0:
             plot_couple_examples(self.network_architecture, self.val_dataloader(), 0.6, 0.5, self.scaled_anchors)
         # print(f"\nCurrently epoch {self.current_epoch}")
@@ -169,12 +172,36 @@ class Yolo3_PL_Model(LightningModule):
             self.train_step_outputs.clear()
             print(f"Train loss {train_epoch_average}")
             # print("On Train Eval loader:")
-            # print("On Train loader:")
-            class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.network_architecture, self.val_dataloader(),
-                                                                                 threshold=config.CONF_THRESHOLD)
-            self.log("class_accuracy", class_accuracy, on_epoch=True, prog_bar=True, logger=True)
-            self.log("no_obj_accuracy", no_obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
-            self.log("obj_accuracy", obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
+            print("On Train loader:")
+            # class_accuracy, no_obj_accuracy, obj_accuracy = check_class_accuracy(self.network_architecture, self.train_dataloader(),
+            #                                                                      threshold=config.CONF_THRESHOLD)
+
+            check_class_accuracy(self.network_architecture, self.train_dataloader(),
+                                 threshold=config.CONF_THRESHOLD) 
+            
+            print("On Train Eval loader:")
+            check_class_accuracy(self.network_architecture, self.val_dataloader(),
+                                 threshold=config.CONF_THRESHOLD)
+
+            pred_boxes, true_boxes = get_evaluation_bboxes(
+                                        self.val_dataloader(),
+                                        self.network_architecture,
+                                        iou_threshold=config.NMS_IOU_THRESH,
+                                        anchors=config.ANCHORS,
+                                        threshold=config.CONF_THRESHOLD,
+                                    )
+            mapval = mean_average_precision(
+                                        pred_boxes,
+                                        true_boxes,
+                                        iou_threshold=config.MAP_IOU_THRESH,
+                                        box_format="midpoint",
+                                        num_classes= config.NUM_CLASSES,
+                                    )
+            print(f"MAP:{mapval.item()}")
+            self.network_architecture.train()                                                                                                          
+            # self.log("class_accuracy", class_accuracy, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("no_obj_accuracy", no_obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("obj_accuracy", obj_accuracy, on_epoch=True, prog_bar=True, logger=True)
 
         if self.collect_garbage == 'epoch':
             garbage_collection_cuda()
