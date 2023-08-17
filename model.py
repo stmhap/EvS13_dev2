@@ -163,7 +163,7 @@ class Yolo3_PL_Model(LightningModule):
         
         epoch = self.current_epoch + 1
         if epoch > 0:
-            plot_couple_examples(self.model, self.test_dataloader(), 0.6, 0.5, self.scaled_anchors)
+            plot_couple_examples(self.network_architecture, self.val_dataloader(), 0.6, 0.5, self.scaled_anchors)
         # print(f"\nCurrently epoch {self.current_epoch}")
         # train_epoch_average = torch.stack(self.train_step_outputs).mean()
         # self.train_step_outputs.clear()
